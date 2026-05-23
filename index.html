@@ -16,6 +16,7 @@
         /* Optimized for PDF generation */
         @media print { 
             .no-print { display: none !important; }
+            .print-page { page-break-before: always; }
             #receipt-view { display: block !important; padding: 20px; }
             #app { box-shadow: none; width: 100%; }
             body { background: white; }
@@ -36,10 +37,13 @@
 
             <div class="space-y-3 mb-6">
                 <input type="text" id="comp-name" value="Deli Cakesymas" class="w-full text-center header-font text-xl border-none outline-none">
+                
                 <label>Nombre del Cliente</label>
                 <input type="text" id="cust-name" class="w-full p-3 border rounded bg-stone-50">
+                
                 <label>Teléfono</label>
                 <input type="text" id="cust-phone" class="w-full p-3 border rounded bg-stone-50">
+                
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label>Fecha de Orden</label>
@@ -47,15 +51,24 @@
                     </div>
                     <button type="button" onclick="document.getElementById('order-date').valueAsDate = new Date()" class="mt-4 bg-pink-100 text-pink-700 font-bold rounded uppercase text-[10px]">Hoy</button>
                 </div>
+                
                 <label>Fecha de Entrega</label>
                 <input type="date" id="delivery-date" class="w-full p-3 border rounded bg-stone-50">
+                
                 <div class="grid grid-cols-2 gap-2">
-                    <div><label>Gastos Indirectos ($)</label><input type="number" id="overhead" class="p-3 border rounded bg-stone-50"></div>
-                    <div><label>Millas</label><input type="number" id="miles" class="p-3 border rounded bg-stone-50"></div>
+                    <div>
+                        <label>Gastos Indirectos ($)</label>
+                        <input type="number" id="overhead" class="p-3 border rounded bg-stone-50">
+                    </div>
+                    <div>
+                        <label>Millas (0.725/milla)</label>
+                        <input type="number" id="miles" class="p-3 border rounded bg-stone-50">
+                    </div>
                 </div>
             </div>
 
             <div id="items-list" class="space-y-4 mb-6"></div>
+            
             <button type="button" onclick="addItem()" class="w-full py-4 bg-pink-100 text-pink-700 font-bold rounded mb-6 text-sm uppercase">+ Agregar Producto</button>
             <button onclick="generateReceipt()" class="w-full bg-pink-500 text-white py-4 rounded font-bold uppercase tracking-widest text-sm shadow-md">Generar Recibo</button>
         </div>
@@ -63,16 +76,31 @@
         <!-- Receipt Mode -->
         <div id="receipt-view" class="hidden">
             <h1 id="r-comp-name" class="text-3xl header-font text-center mb-6 text-stone-800">Deli Cakesymas</h1>
-            <div id="r-items-display" class="text-sm space-y-2 mb-6 border-b pb-4"></div>
-            <div class="space-y-4 text-sm">
+            
+            <div class="text-sm space-y-2 mb-6 bg-pink-50 p-4 rounded no-print">
+                <p><strong>CLIENTE:</strong> <span id="r-name"></span></p>
+                <p><strong>ENTREGA:</strong> <span id="r-delivery"></span></p>
+            </div>
+
+            <div id="r-items-display" class="space-y-4"></div>
+            
+            <div class="space-y-4 text-sm mt-6">
                 <div class="flex justify-between font-bold text-lg border-t pt-2"><span>TOTAL:</span> <span id="r-total">$0.00</span></div>
+                
                 <div class="no-print grid grid-cols-2 gap-4">
-                    <div><label>Depósito</label><input type="number" id="deposit-val" class="p-3 border rounded bg-stone-50" oninput="updateBalances()"></div>
-                    <div class="p-3 font-bold text-pink-600">Balance: <span id="r-balance">$0.00</span></div>
+                    <div>
+                        <label>Depósito</label>
+                        <input type="number" id="deposit-val" class="p-3 border rounded bg-stone-50" placeholder="$0.00" oninput="updateBalances()">
+                    </div>
+                    <div class="p-3 font-bold text-pink-600 flex flex-col justify-center">
+                        <span class="text-[10px] text-stone-500 uppercase">Balance:</span> 
+                        <span id="r-balance" class="text-xl">$0.00</span>
+                    </div>
                 </div>
-                <div class="p-4 border rounded">
-                    <p class="font-bold mb-2">Método de Pago:</p>
-                    <div class="grid grid-cols-3 gap-3 text-[10px]">
+                
+                <div class="p-4 border rounded no-print">
+                    <p class="font-bold mb-2 uppercase text-[10px]">Método de Pago:</p>
+                    <div class="grid grid-cols-3 gap-3 text-xs">
                         <label class="flex items-center gap-1"><input type="checkbox"> Cash</label>
                         <label class="flex items-center gap-1"><input type="checkbox"> Zelle</label>
                         <label class="flex items-center gap-1"><input type="checkbox"> Venmo</label>
@@ -82,9 +110,13 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Dynamic Photos Section appended here during generation -->
+            <div id="r-photos-section" class="mt-8"></div>
+
             <div class="grid grid-cols-2 gap-2 mt-8 no-print">
                 <button onclick="document.getElementById('input-view').classList.remove('hidden'); document.getElementById('receipt-view').classList.add('hidden');" class="bg-stone-200 py-4 font-bold text-xs uppercase">Editar</button>
-                <button onclick="window.print()" class="bg-stone-800 text-white py-4 font-bold text-xs uppercase">Imprimir / Guardar PDF</button>
+                <button onclick="window.print()" class="bg-stone-800 text-white py-4 font-bold text-xs uppercase">Imprimir / PDF</button>
             </div>
         </div>
     </div>
@@ -92,24 +124,33 @@
     <script>
         let items = [];
         let finalTotal = 0;
+        let currentOrderKey = null;
 
-        function addItem() { items.push({ id: Date.now(), name: '', ing: 0, pkg: 0, labor: 0, diff: '1' }); renderItems(); }
+        function addItem() { items.push({ id: Date.now(), name: '', ing: 0, pkg: 0, labor: 0, diff: '1', photo: '' }); renderItems(); }
+        
         function renderItems() {
+            // Photo functionality has been moved to the receipt page
             document.getElementById('items-list').innerHTML = items.map((item, i) => `
                 <div class="p-3 border rounded bg-stone-50 space-y-1">
                     <label>Producto</label>
-                    <input type="text" class="item-name w-full p-2 border rounded" value="${item.name}" onchange="saveItems()">
+                    <input type="text" class="item-name w-full p-2 border rounded" value="${item.name}" placeholder="Ej: Pastel de Chocolate" onchange="saveItems()">
                     <div class="grid grid-cols-2 gap-2 mt-2">
-                        <label>Ingredientes</label><label>Empaque</label>
+                        <label>Ingredientes ($)</label><label>Empaque ($)</label>
                         <input type="number" class="item-ing p-2 border rounded" value="${item.ing}" onchange="saveItems()">
                         <input type="number" class="item-pkg p-2 border rounded" value="${item.pkg}" onchange="saveItems()">
+                        
                         <label>Horas de Labor</label><label>Dificultad</label>
                         <input type="number" class="item-labor p-2 border rounded" value="${item.labor}" onchange="saveItems()">
-                        <select class="item-diff p-2 border rounded" onchange="saveItems()"><option value="1" ${item.diff=='1'?'selected':''}>Básico</option><option value="1.5" ${item.diff=='1.5'?'selected':''}>Técnico</option><option value="2" ${item.diff=='2'?'selected':''}>Extra</option></select>
+                        <select class="item-diff p-2 border rounded" onchange="saveItems()">
+                            <option value="1" ${item.diff=='1'?'selected':''}>Básico (1x)</option>
+                            <option value="1.5" ${item.diff=='1.5'?'selected':''}>Técnico (1.5x)</option>
+                            <option value="2" ${item.diff=='2'?'selected':''}>Extra (2x)</option>
+                        </select>
                     </div>
                 </div>
             `).join('');
         }
+
         function saveItems() {
             document.querySelectorAll('#items-list > div').forEach((div, i) => {
                 items[i].name = div.querySelector('.item-name').value;
@@ -119,48 +160,132 @@
                 items[i].diff = div.querySelector('.item-diff').value;
             });
         }
+
         function generateReceipt() {
             saveItems();
-            document.getElementById('r-comp-name').innerText = document.getElementById('comp-name').value;
+            const compName = document.getElementById('comp-name').value || "Deli Cakesymas";
+            document.getElementById('r-comp-name').innerText = compName;
+            document.getElementById('r-name').innerText = document.getElementById('cust-name').value || "Cliente";
+            document.getElementById('r-delivery').innerText = document.getElementById('delivery-date').value || "Sin fecha";
             
             let total = 0;
-            let receiptItemsHtml = '';
-            items.forEach(item => {
-                let sub = (item.ing + item.pkg + (item.labor * 50)) * parseFloat(item.diff);
+            
+            // Build Receipt summary block
+            let html = '<div class="border-b border-stone-300 pb-4"><p class="font-bold uppercase text-[10px] mb-3 text-stone-500">Resumen de Pedido</p>';
+            items.forEach(it => {
+                let sub = (it.ing + it.pkg + (it.labor * 50)) * parseFloat(it.diff);
                 total += sub;
-                receiptItemsHtml += `<div class="flex justify-between"><span>${item.name || 'Producto'}</span> <span>$${sub.toFixed(2)}</span></div>`;
+                html += `<div class="flex justify-between text-sm py-1"><span>${it.name || 'Producto Sin Nombre'}</span> <span class="font-bold">$${sub.toFixed(2)}</span></div>`;
             });
-            document.getElementById('r-items-display').innerHTML = receiptItemsHtml;
-            finalTotal = total + (parseFloat(document.getElementById('overhead').value) || 0) + ((parseFloat(document.getElementById('miles').value) || 0) * 0.725);
+            html += '</div>';
+
+            // Calculate final total including miles & overhead
+            const overhead = parseFloat(document.getElementById('overhead').value) || 0;
+            const delivery = (parseFloat(document.getElementById('miles').value) || 0) * 0.725;
+            finalTotal = total + overhead + delivery;
+            
+            if (overhead > 0) html += `<div class="flex justify-between text-sm py-1 border-b border-stone-100"><span>Gastos Indirectos</span> <span>$${overhead.toFixed(2)}</span></div>`;
+            if (delivery > 0) html += `<div class="flex justify-between text-sm py-1 border-b border-stone-100"><span>Delivery (Millas)</span> <span>$${delivery.toFixed(2)}</span></div>`;
+
+            document.getElementById('r-items-display').innerHTML = html;
             document.getElementById('r-total').innerText = `$${finalTotal.toFixed(2)}`;
-            document.getElementById('r-balance').innerText = `$${finalTotal.toFixed(2)}`;
+            updateBalances();
+
+            // Build individual item pages for photos
+            let photosHtml = '';
+            items.forEach((it, i) => {
+                let sub = (it.ing + it.pkg + (it.labor * 50)) * parseFloat(it.diff);
+                const hasPhoto = !!it.photo;
+                photosHtml += `
+                    <div id="photo-container-${i}" class="mt-8 pt-6 border-t-2 border-dashed border-stone-200 ${hasPhoto ? 'print-page' : 'print:hidden'}">
+                        <h2 class="text-3xl header-font text-center text-stone-800 hidden print:block">${compName}</h2>
+                        <h3 class="text-xl font-bold text-center mt-4 text-stone-700">${it.name || 'Producto'}</h3>
+                        <p class="text-center text-stone-500 font-bold mb-4">Precio: $${sub.toFixed(2)}</p>
+                        
+                        <div class="no-print">
+                            <input type="file" accept="image/*" class="hidden" id="r-file-${i}" onchange="handlePhotoReceipt(${i}, this)">
+                            <button type="button" onclick="document.getElementById('r-file-${i}').click()" class="w-full bg-stone-200 text-stone-600 font-bold uppercase text-[10px] py-3 rounded">📸 Agregar Foto de Producto Terminado</button>
+                        </div>
+                        
+                        <div id="photo-display-${i}" class="mt-4 text-center">
+                            ${hasPhoto ? `<img src="${it.photo}" class="w-full rounded-xl shadow-lg border border-stone-200 object-contain max-h-[60vh] mx-auto">` : '<p class="text-stone-400 italic text-xs no-print">Sin foto añadida</p>'}
+                        </div>
+                    </div>
+                `;
+            });
+            document.getElementById('r-photos-section').innerHTML = photosHtml;
+            
             document.getElementById('input-view').classList.add('hidden');
             document.getElementById('receipt-view').classList.remove('hidden');
         }
+
+        function handlePhotoReceipt(i, input) {
+            const file = input.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = e => { 
+                items[i].photo = e.target.result; 
+                
+                // Update photo display
+                document.getElementById(`photo-display-${i}`).innerHTML = `<img src="${items[i].photo}" class="w-full rounded-xl shadow-lg border border-stone-200 object-contain max-h-[60vh] mx-auto">`;
+                
+                // Make sure it prints on its own page
+                const container = document.getElementById(`photo-container-${i}`);
+                container.classList.add('print-page');
+                container.classList.remove('print:hidden');
+                
+                // Automatically save silently when a photo is added
+                saveOrder(true);
+            };
+            reader.readAsDataURL(file);
+        }
+
         function updateBalances() {
             const deposit = parseFloat(document.getElementById('deposit-val').value) || 0;
             document.getElementById('r-balance').innerText = `$${(finalTotal - deposit).toFixed(2)}`;
         }
-        function saveOrder() {
+
+        function saveOrder(silent = false) {
             saveItems();
             const name = document.getElementById('cust-name').value || "Pedido";
+            
+            if (!currentOrderKey) {
+                currentOrderKey = name + "_" + Date.now();
+            }
+
             const orders = JSON.parse(localStorage.getItem('bakeryOrders') || '{}');
-            orders[name + Date.now()] = { items, name, comp: document.getElementById('comp-name').value };
-            localStorage.setItem('bakeryOrders', JSON.stringify(orders));
-            alert("Guardado"); location.reload();
+            orders[currentOrderKey] = { items, name, comp: document.getElementById('comp-name').value };
+            
+            try {
+                localStorage.setItem('bakeryOrders', JSON.stringify(orders));
+                if (!silent) {
+                    alert("Guardado Exitosamente"); 
+                    refreshList();
+                }
+            } catch (e) {
+                if (!silent) alert("Error al guardar: Probablemente la foto es demasiado pesada para la memoria local de tu dispositivo.");
+            }
         }
+
         function loadOrder() {
             const key = document.getElementById('load-select').value;
             if(!key) return;
+            currentOrderKey = key;
             const order = JSON.parse(localStorage.getItem('bakeryOrders'))[key];
-            items = order.items; document.getElementById('comp-name').value = order.comp; document.getElementById('cust-name').value = order.name; renderItems();
+            items = order.items; 
+            document.getElementById('comp-name').value = order.comp || "Deli Cakesymas"; 
+            document.getElementById('cust-name').value = order.name; 
+            renderItems();
         }
-        refreshList();
+
         function refreshList() {
             const orders = JSON.parse(localStorage.getItem('bakeryOrders') || '{}');
-            document.getElementById('load-select').innerHTML = '<option>Cargar...</option>' + Object.keys(orders).map(k => `<option value="${k}">${k}</option>`).join('');
+            document.getElementById('load-select').innerHTML = '<option value="">Cargar...</option>' + Object.keys(orders).map(k => `<option value="${k}">${k}</option>`).join('');
         }
-        addItem();
+
+        // Initialize App
+        addItem(); 
+        refreshList();
     </script>
 </body>
 </html>
