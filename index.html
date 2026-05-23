@@ -127,12 +127,21 @@
         let currentOrderKey = null;
 
         function addItem() { items.push({ id: Date.now(), name: '', ing: 0, pkg: 0, labor: 0, diff: '1', photo: '' }); renderItems(); }
+
+        function removeItem(index) {
+            saveItems(); // Save current inputs before removing
+            items.splice(index, 1);
+            renderItems();
+        }
         
         function renderItems() {
             // Photo functionality has been moved to the receipt page
             document.getElementById('items-list').innerHTML = items.map((item, i) => `
                 <div class="p-3 border rounded bg-stone-50 space-y-1">
-                    <label>Producto</label>
+                    <div class="flex justify-between items-center">
+                        <label>Producto</label>
+                        <button type="button" onclick="removeItem(${i})" class="text-red-500 font-bold text-[10px] bg-red-100 rounded px-2" style="min-height: 24px; width: auto; display: inline-block; margin-bottom: 2px;">✕ Eliminar</button>
+                    </div>
                     <input type="text" class="item-name w-full p-2 border rounded" value="${item.name}" placeholder="Ej: Pastel de Chocolate" onchange="saveItems()">
                     <div class="grid grid-cols-2 gap-2 mt-2">
                         <label>Ingredientes ($)</label><label>Empaque ($)</label>
